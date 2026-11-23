@@ -83,8 +83,8 @@ class DataMergeService(BaseModuleService):
         rule = store.find(self.MODULE, rule_id)
 
         # 联动增强：归并结果写入审计
-        from app.services.data_manager import write_audit, DATA_ROOT
-        audit_id = max((int(f.stem) for f in DATA_ROOT.glob("audit/[0-9]*.json")), default=0) + 1
+        from app.services.data_manager import write_audit, next_audit_id
+        audit_id = next_audit_id()
         write_audit(audit_id, {
             "audit_id": audit_id,
             "api_name": rule.get("主API", "") if rule else "",

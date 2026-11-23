@@ -15,6 +15,11 @@ class BaseModuleService:
     ACTION_RULES: dict[str, str] = {}
     NEGATIVE_ACTIONS: list[str] = []
 
+    @property
+    def export_fields(self) -> list[str]:
+        """导出列；默认与列表字段一致，模块可追加归属/来源等核对列。"""
+        return list(self.LIST_FIELDS)
+
     def list_entries(
         self,
         *,

@@ -3,7 +3,8 @@
 职责：
 - 每个服务产出 domain_snapshot 后序列化到 data/{module}/snapshot.json
 - 下游服务从 data/ 目录读取上游的标准化数据产物
-- 审计记录写入 data/audit/
+- 审计记录按月分片写入 data/audit/monthly/，并兼容迁移前的逐条 JSON
+- 审计归档按原日期切历史明细写入 data/audit/archive/
 - 用量记录写入 data/usage/
 - 导出任务结果写入 data/exports/
 - API 注册快照写入 data/api/
@@ -166,56 +167,67 @@ def settle_billing(billing_cycle: str, use_auto_settlement: bool = True) -> dict
 
 
 # ========== 调用审计 ==========
+# 审计明细默认按月分片写入 data/audit/monthly/，读写兼容迁移前的逐条 JSON。
+# 具体存储、去重、对账和归档逻辑集中在 audit_store。
 
 
 def write_audit(audit_id: int, audit_data: dict[str, Any]) -> None:
-    """写入审计记录。"""
-    audit_data["_logged_at"] = _now_iso()
-    _write_json(DATA_ROOT / "audit" / f"{audit_id:06d}.json", audit_data)
+    """写入审计明细（按月分片）。已有 _logged_at 原样保留。"""
+    from app.services import audit_store
+
+    audit_store.write_audit_record(audit_id, audit_data)
 
 
 def read_audit(audit_id: int) -> dict[str, Any]:
-    return _read_json(DATA_ROOT / "audit" / f"{audit_id:06d}.json", {})
+    from app.services import audit_store
+
+    return audit_store.read_audit_record(audit_id)
 
 
 def list_audit(api_name: str | None = None, caller: str | None = None,
-               start_time: str | None = None, end_time: str | None = None) -> list[dict[str, Any]]:
-    """按条件查询审计记录。"""
-    _ensure_dir(DATA_ROOT / "audit")
-    records = []
-    for f in sorted(DATA_ROOT.glob("audit/*.json")):
-        record = _read_json(f)
-        if not record:
-            continue
-        if api_name and record.get("api_name") != api_name:
-            continue
-        if caller and record.get("caller") != caller:
-            continue
-        if start_time and record.get("_logged_at", "") < start_time:
-            continue
-        if end_time and record.get("_logged_at", "") > end_time:
-            continue
-        records.append(record)
+               start_time: str | None = None, end_time: str | None = None,
+               *, end_exclusive: bool = False) -> list[dict[str, Any]]:
+    """按条件查询审计明细：旧目录 ∪ 月分片，按原始编号去重只计一笔。"""
+    from app.services import audit_store
+
+    records, _ = audit_store.query_audit(
+        api_name=api_name,
+        caller=caller,
+        start_time=start_time,
+        end_time=end_time,
+        end_exclusive=end_exclusive,
+    )
     return records
 
 
+def reconcile_audit(api_name: str | None = None, caller: str | None = None,
+                    start_time: str | None = None, end_time: str | None = None,
+                    *, end_exclusive: bool = False) -> dict[str, Any]:
+    """核对区间内旧目录与月分片的记录数、去重量和分片完整性。"""
+    from app.services import audit_store
+
+    _, reconciliation = audit_store.query_audit(
+        api_name=api_name,
+        caller=caller,
+        start_time=start_time,
+        end_time=end_time,
+        end_exclusive=end_exclusive,
+    )
+    return reconciliation
+
+
 def archive_audit_records(before_date: str) -> dict[str, Any]:
-    """归档指定日期之前的审计记录。"""
-    records = list_audit()
-    archived = [r for r in records if r.get("_logged_at", "")[:10] < before_date]
-    archive_data = {
-        "archive_date": _now_iso(),
-        "before_date": before_date,
-        "archived_count": len(archived),
-        "records": archived,
-    }
-    _write_json(DATA_ROOT / "audit" / f"_archive_{before_date}.json", archive_data)
-    # 标记已归档
-    for r in archived:
-        rid = r.get("audit_id", 0)
-        r["status"] = "已归档"
-        write_audit(rid, r)
-    return archive_data
+    """归档指定日期之前的审计明细，按原日期切历史明细并保留原编号。"""
+    from app.services import audit_store
+
+    return audit_store.archive_audit_records(before_date)
+
+
+def next_audit_id() -> int:
+    """跨旧目录与月分片取下一个可用的原始 audit_id。"""
+    from app.services import audit_store
+
+    return audit_store.next_audit_id()
 
 
 # ========== 导出任务 ==========

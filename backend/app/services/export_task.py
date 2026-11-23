@@ -96,9 +96,8 @@ class ExportTaskService(BaseModuleService):
         ]
 
     def _next_audit_id(self) -> int:
-        from app.services.data_manager import DATA_ROOT
-        existing = list(DATA_ROOT.glob("audit/[0-9]*.json"))
-        return max((int(f.stem) for f in existing), default=0) + 1
+        from app.services.data_manager import next_audit_id
+        return next_audit_id()
 
     def run_action(self, entry_id: int, action: str) -> tuple[dict[str, Any] | None, str]:
         entry = store.find(self.MODULE, entry_id)

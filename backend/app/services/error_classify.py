@@ -60,14 +60,14 @@ class ErrorClassifyService(BaseModuleService):
         联动增强：归类后自动写入审计记录，供下游查询追溯。
         返回归类结果列表。
         """
-        from app.services.data_manager import read_module_snapshot, write_audit, DATA_ROOT
+        from app.services.data_manager import read_module_snapshot, write_audit, next_audit_id
         results = []
         snap = read_module_snapshot("sla_events")
         if snap and snap.get("error_type"):
             classification = self.classify(snap.get("error_type", ""), snap.get("detail", ""))
             # 联动增强：写入审计记录
             if classification.get("matched"):
-                audit_id = max((int(f.stem) for f in DATA_ROOT.glob("audit/[0-9]*.json")), default=0) + 1
+                audit_id = next_audit_id()
                 write_audit(audit_id, {
                     "audit_id": audit_id,
                     "api_name": snap.get("api_name", ""),

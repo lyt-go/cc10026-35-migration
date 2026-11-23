@@ -99,8 +99,8 @@ class UsageBillingService(BaseModuleService):
             settlement = settle_billing(billing_cycle, use_auto_settlement=True)
 
             # 联动增强：结算完成写入调用审计记录
-            from app.services.data_manager import write_audit, DATA_ROOT
-            audit_id = max((int(f.stem) for f in DATA_ROOT.glob("audit/[0-9]*.json")), default=0) + 1
+            from app.services.data_manager import write_audit, next_audit_id
+            audit_id = next_audit_id()
             write_audit(audit_id, {
                 "audit_id": audit_id,
                 "api_name": entry.get("API名称", ""),

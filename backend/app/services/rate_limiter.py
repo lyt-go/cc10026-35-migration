@@ -68,10 +68,8 @@ class RateLimiterService(BaseModuleService):
         return {"allowed": True, "limit": 0, "reason": "未配置限流策略"}
 
     def _next_audit_id(self) -> int:
-        from app.services.data_manager import DATA_ROOT
-        import os
-        existing = list(DATA_ROOT.glob("audit/[0-9]*.json"))
-        return max((int(f.stem) for f in existing), default=0) + 1
+        from app.services.data_manager import next_audit_id
+        return next_audit_id()
 
     def _today_str(self) -> str:
         from datetime import datetime, timedelta, timezone

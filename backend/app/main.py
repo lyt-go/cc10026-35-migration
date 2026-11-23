@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.routers import ROUTERS
+from app.routers import audit as audit_router
 from app.store import store
 
 app = FastAPI(title="数据服务开放与订阅管理平台", version="1.0.0")
@@ -33,6 +34,9 @@ def overview() -> dict[str, object]:
     """运营概览：把各业务模块的待处理量汇总成看板卡片。"""
     return store.overview()
 
+
+# 审计固定路径（/api/audit/...）先于资源路由注册，避免被 /api/{module}/{entry_id} 抢占。
+app.include_router(audit_router.router)
 
 # 资源路由含 /api/{module}，必须放在 health / overview 之后注册，
 # 否则固定路径会被动态路径抢先匹配。
